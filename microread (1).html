@@ -1,0 +1,965 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>MicroRead – Attention-Adaptive Learning</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css"/>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700;800;900&family=Playfair+Display:wght@700;900&display=swap');
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:           #fdf0f5;
+      --bg2:          #f8e0ec;
+      --surface:      #ffffff;
+      --text:         #2d1a26;
+      --sub:          #9a7589;
+      --accent:       #d4558a;
+      --accent2:      #f4a7c3;
+      --accent-light: #fde8f2;
+      --accent-mid:   #f0c0d8;
+      --border:       #f0d0e0;
+      --shadow-c:     rgba(180,80,130,0.13);
+      --correct:      #27855a;
+      --correct-bg:   #e6f7ef;
+      --correct-bd:   #a8dfc4;
+      --wrong:        #c0392b;
+      --wrong-bg:     #fdecea;
+      --wrong-bd:     #f5b7b1;
+      --radius:       20px;
+      --ease:         0.32s cubic-bezier(0.22,1,0.36,1);
+      --bounce:       0.4s cubic-bezier(0.34,1.56,0.64,1);
+    }
+
+    body.mode-animals {
+      --bg: #f0f8f2; --bg2: #daeee2;
+      --accent: #2e8b5a; --accent2: #74c89a;
+      --accent-light: #e4f5ec; --accent-mid: #b8e4ca;
+      --border: #c4e4d0; --shadow-c: rgba(46,139,90,0.12);
+    }
+    body.mode-games {
+      --bg: #f3f0fd; --bg2: #e2daff;
+      --accent: #6241d4; --accent2: #ab96f7;
+      --accent-light: #ede8ff; --accent-mid: #cac0f8;
+      --border: #d4ccf5; --shadow-c: rgba(98,65,212,0.12);
+    }
+    body.mode-satisfying {
+      --bg: #f0f7fb; --bg2: #d8ecf5;
+      --accent: #1a7fa0; --accent2: #6ec4df;
+      --accent-light: #ddf3fb; --accent-mid: #b0dff0;
+      --border: #c0e0ef; --shadow-c: rgba(26,127,160,0.12);
+    }
+
+    html, body { min-height: 100%; }
+    body {
+      font-family: 'Nunito', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      transition: background 0.5s ease;
+      position: relative;
+      overflow-x: hidden;
+    }
+
+    body::before, body::after {
+      content: ''; position: fixed; border-radius: 50%;
+      pointer-events: none; z-index: 0; transition: background 0.5s ease;
+    }
+    body::before {
+      width: 500px; height: 500px; top: -160px; right: -140px;
+      background: radial-gradient(circle, var(--accent-mid) 0%, transparent 70%); opacity: 0.4;
+    }
+    body::after {
+      width: 360px; height: 360px; bottom: -110px; left: -90px;
+      background: radial-gradient(circle, var(--accent2) 0%, transparent 70%); opacity: 0.22;
+    }
+
+    .sdg-bar {
+      position: fixed; top: 0; left: 0; right: 0; height: 4px; z-index: 1000;
+      background: linear-gradient(90deg,#e5243b,#dda63a,#4c9f38,#c5192d,#ff3a21,#26bde2,#fcc30b,#a21942,#fd6925,#dd1367,#fd9d24,#bf8b2e,#3f7e44,#0a97d9,#56c02b,#00689d,#19486a);
+    }
+
+    /* ── SCREENS ── */
+    .screen { display: none; opacity: 0; }
+    .screen.active { display: block; animation: sIn 0.42s cubic-bezier(0.22,1,0.36,1) forwards; }
+    .screen.out { animation: sOut 0.22s ease forwards; pointer-events: none; }
+    @keyframes sIn  { from{opacity:0;transform:translateY(16px)} to{opacity:1;transform:translateY(0)} }
+    @keyframes sOut { from{opacity:1;transform:translateY(0)} to{opacity:0;transform:translateY(-10px)} }
+
+    /* ════════════════════════════════════
+       DASHBOARD SCREEN
+    ════════════════════════════════════ */
+    #screen-dashboard { position: relative; z-index: 1; }
+
+    .dash-nav {
+      position: sticky; top: 4px; z-index: 100;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 40px; height: 58px;
+      background: rgba(253,240,245,0.88); backdrop-filter: blur(12px);
+      border-bottom: 1.5px solid var(--border);
+    }
+    .dash-nav-logo { display: flex; align-items: center; gap: 9px; }
+    .nav-logo-mark {
+      width: 30px; height: 30px; background: var(--accent);
+      border-radius: 8px; display: flex; align-items: center; justify-content: center;
+    }
+    .nav-logo-mark i { font-size: 16px; color: #fff; }
+    .nav-logo-text {
+      font-family: 'Playfair Display', serif;
+      font-size: 20px; font-weight: 700; color: var(--accent); letter-spacing: -0.5px;
+    }
+    .nav-logo-text span { color: var(--text); }
+    .dash-nav-links { display: flex; align-items: center; gap: 2px; }
+    .nav-link {
+      display: flex; align-items: center; gap: 6px;
+      padding: 7px 13px; border-radius: 50px; border: none; background: none;
+      font-family: 'Nunito', sans-serif; font-size: 13px; font-weight: 600;
+      color: var(--sub); cursor: pointer; transition: background 0.15s, color 0.15s;
+    }
+    .nav-link:hover { background: var(--accent-light); color: var(--accent); }
+    .nav-link.active { background: var(--accent-light); color: var(--accent); }
+    .nav-link i { font-size: 15px; }
+    .nav-cta {
+      display: flex; align-items: center; gap: 7px;
+      padding: 9px 18px; border-radius: 50px; border: none;
+      background: var(--accent); color: #fff;
+      font-family: 'Nunito', sans-serif; font-size: 13px; font-weight: 800;
+      cursor: pointer; transition: opacity 0.2s, transform 0.2s;
+      box-shadow: 0 4px 14px var(--shadow-c);
+    }
+    .nav-cta:hover { opacity: 0.88; transform: translateY(-1px); }
+    .nav-cta i { font-size: 14px; }
+
+    /* HERO */
+    .dash-hero {
+      padding: 64px 40px 52px; max-width: 860px; margin: 0 auto;
+      position: relative;
+    }
+    .hero-eyebrow {
+      display: inline-flex; align-items: center; gap: 7px;
+      background: var(--accent-light); color: var(--accent);
+      font-size: 11px; font-weight: 800; letter-spacing: 2px; text-transform: uppercase;
+      padding: 5px 14px; border-radius: 99px; margin-bottom: 22px;
+      border: 1px solid var(--accent-mid);
+    }
+    .hero-eyebrow .sdg-dot { width: 7px; height: 7px; border-radius: 50%; background: #00689d; }
+    .dash-hero h1 {
+      font-family: 'Playfair Display', serif;
+      font-size: 46px; font-weight: 900; color: var(--text);
+      line-height: 1.12; margin-bottom: 18px; letter-spacing: -1px; max-width: 600px;
+    }
+    .dash-hero h1 em { font-style: normal; color: var(--accent); }
+    .dash-hero p {
+      font-size: 16px; color: var(--sub); line-height: 1.8;
+      max-width: 540px; margin-bottom: 32px; font-weight: 500;
+    }
+    .hero-stats { display: flex; gap: 36px; margin-bottom: 0; }
+    .hstat { display: flex; flex-direction: column; }
+    .hstat-val {
+      font-family: 'Playfair Display', serif;
+      font-size: 28px; font-weight: 700; color: var(--accent); line-height: 1; margin-bottom: 4px;
+    }
+    .hstat-lbl { font-size: 12px; color: var(--sub); font-weight: 600; }
+
+    /* PROBLEM SECTION */
+    .dash-section { padding: 40px 40px; max-width: 860px; margin: 0 auto; }
+    .section-eyebrow {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 11px; font-weight: 800; letter-spacing: 2px; text-transform: uppercase;
+      color: var(--accent); margin-bottom: 18px;
+    }
+    .section-eyebrow i { font-size: 14px; }
+    .problem-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+    .problem-card {
+      background: var(--surface); border: 1.5px solid var(--border);
+      border-radius: 16px; padding: 22px; transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .problem-card:hover { transform: translateY(-3px); box-shadow: 0 8px 24px var(--shadow-c); }
+    .prob-icon {
+      width: 40px; height: 40px; border-radius: 12px;
+      display: flex; align-items: center; justify-content: center; margin-bottom: 14px;
+    }
+    .prob-icon i { font-size: 20px; }
+    .pi-pink { background: var(--accent-light); } .pi-pink i { color: var(--accent); }
+    .pi-blue { background: #e6f1fb; } .pi-blue i { color: #185fa5; }
+    .pi-amber { background: #faeeda; } .pi-amber i { color: #ba7517; }
+    .problem-card h3 {
+      font-size: 13px; font-weight: 800; color: var(--text); margin-bottom: 7px;
+      letter-spacing: 0.2px;
+    }
+    .problem-card p { font-size: 12.5px; color: var(--sub); line-height: 1.65; font-weight: 500; }
+
+    /* DIVIDER */
+    .dash-divider { border: none; border-top: 1.5px solid var(--border); margin: 0 40px; }
+
+    /* MODES SECTION */
+    .modes-section { padding: 40px 40px; max-width: 860px; margin: 0 auto; }
+    .modes-head { display: flex; align-items: flex-end; justify-content: space-between; margin-bottom: 22px; }
+    .modes-head-left h2 {
+      font-family: 'Playfair Display', serif;
+      font-size: 26px; font-weight: 700; color: var(--text); margin-bottom: 4px;
+    }
+    .modes-head-left p { font-size: 13px; color: var(--sub); font-weight: 500; }
+    .mode-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+
+    .mode-card-dash {
+      background: var(--surface); border: 2px solid var(--border);
+      border-radius: var(--radius); overflow: hidden;
+      transition: border-color 0.2s, box-shadow 0.2s, transform 0.2s;
+      display: flex; flex-direction: column;
+    }
+    .mode-card-dash:hover {
+      border-color: var(--accent); transform: translateY(-4px);
+      box-shadow: 0 12px 32px var(--shadow-c);
+    }
+    .mode-card-top { padding: 22px 22px 0; display: flex; align-items: flex-start; justify-content: space-between; }
+    .mode-badge {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 5px 12px; border-radius: 99px;
+      font-size: 11px; font-weight: 800; letter-spacing: 0.5px;
+    }
+    .mode-badge i { font-size: 12px; }
+    .mb-pink { background: var(--accent-light); color: var(--accent); border: 1px solid var(--accent-mid); }
+    .mb-purple { background: #ede8ff; color: #534ab7; border: 1px solid #cac0f8; }
+    .mode-num { font-size: 11px; font-weight: 800; color: var(--sub); letter-spacing: 1px; text-transform: uppercase; }
+
+    .mode-card-body { padding: 16px 22px 18px; flex: 1; }
+    .mode-card-body h3 {
+      font-family: 'Playfair Display', serif;
+      font-size: 17px; font-weight: 700; color: var(--text); margin-bottom: 10px; line-height: 1.3;
+    }
+    .mode-card-body p { font-size: 13px; color: var(--sub); line-height: 1.7; margin-bottom: 16px; font-weight: 500; }
+
+    .mode-flow { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; margin-bottom: 0; }
+    .flow-step {
+      display: flex; align-items: center; gap: 4px;
+      font-size: 11px; font-weight: 700; color: var(--sub);
+      background: var(--bg); padding: 4px 9px; border-radius: 99px;
+      border: 1.5px solid var(--border);
+    }
+    .flow-step i { font-size: 11px; }
+    .flow-arr { font-size: 10px; color: var(--sub); opacity: 0.5; }
+
+    .mode-card-btn {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 13px 22px; border-top: 1.5px solid var(--border);
+      border: none; width: 100%; background: var(--bg);
+      font-family: 'Nunito', sans-serif; font-size: 13px; font-weight: 800;
+      color: var(--text); cursor: pointer;
+      transition: background 0.15s, color 0.15s;
+      border-top: 1.5px solid var(--border);
+    }
+    .mode-card-btn:hover { background: var(--accent-light); color: var(--accent); }
+    .mode-card-btn i { font-size: 16px; transition: transform 0.2s; }
+    .mode-card-dash:hover .mode-card-btn i { transform: translateX(4px); }
+
+    /* BOTTOM NAV PANELS */
+    .dash-bottom { padding: 0 40px 40px; max-width: 860px; margin: 0 auto; }
+    .bottom-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+    .bottom-card {
+      background: var(--surface); border: 1.5px solid var(--border);
+      border-radius: 16px; padding: 20px;
+      cursor: pointer; transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .bottom-card:hover { transform: translateY(-3px); box-shadow: 0 6px 20px var(--shadow-c); }
+    .bottom-card i { font-size: 22px; color: var(--accent); margin-bottom: 10px; display: block; }
+    .bottom-card h4 { font-size: 13px; font-weight: 800; color: var(--text); margin-bottom: 5px; }
+    .bottom-card p { font-size: 12px; color: var(--sub); line-height: 1.6; font-weight: 500; }
+
+    /* FOOTER */
+    .dash-footer {
+      padding: 18px 40px; border-top: 1.5px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+      max-width: 100%;
+    }
+    .footer-brand { font-size: 11px; font-weight: 900; letter-spacing: 1px; text-transform: uppercase; color: var(--accent); }
+    .sdg-strip { display: flex; gap: 4px; align-items: center; }
+    .sdg-pip { width: 9px; height: 9px; border-radius: 2px; }
+    .footer-sdg { font-size: 10.5px; color: var(--sub); font-weight: 700; }
+
+    /* ════════════════════════════════════
+       READING & QUIZ SCREENS (card wrapper)
+    ════════════════════════════════════ */
+    .card-screen-wrap {
+      display: flex; align-items: center; justify-content: center;
+      min-height: 100vh; padding: 60px 16px 40px; position: relative; z-index: 1;
+    }
+    .card {
+      background: var(--surface);
+      border-radius: var(--radius);
+      box-shadow: 0 10px 48px var(--shadow-c), 0 2px 8px rgba(0,0,0,0.04);
+      border: 1.5px solid var(--border);
+      width: 100%; max-width: 700px;
+      padding: 52px 56px;
+      position: relative; overflow: hidden;
+      transition: box-shadow 0.4s ease, border-color 0.4s ease;
+    }
+    .card::before {
+      content: ''; position: absolute; top: 0; left: 0; right: 0; height: 4px;
+      background: linear-gradient(90deg, var(--accent), var(--accent2), var(--accent));
+      background-size: 200% 100%; animation: shimmer 3s linear infinite;
+    }
+    @keyframes shimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
+
+    /* PROGRESS */
+    .prog-section { margin-bottom: 24px; }
+    .prog-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+    .chunk-badge {
+      background: var(--accent-light); color: var(--accent);
+      font-size: 11px; font-weight: 800; padding: 4px 12px;
+      border-radius: 99px; letter-spacing: 1px; text-transform: uppercase; border: 1px solid var(--accent-mid);
+    }
+    .chunk-type { font-size: 11px; font-weight: 700; color: var(--sub); margin-left: 7px; }
+    .prog-right { display: flex; align-items: center; gap: 10px; }
+    .pct-lbl { font-size: 13px; font-weight: 800; color: var(--accent); }
+    .score-pill {
+      display: flex; align-items: center; gap: 5px; background: var(--bg);
+      border: 1.5px solid var(--border); border-radius: 99px; padding: 4px 12px;
+      font-size: 12px; font-weight: 700; color: var(--sub);
+    }
+    .score-pill .sn { color: var(--accent); font-size: 14px; font-weight: 900; }
+    .prog-track { background: var(--bg2); border-radius: 99px; height: 8px; overflow: hidden; }
+    .prog-fill {
+      height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent2));
+      border-radius: 99px; transition: width 0.6s cubic-bezier(0.22,1,0.36,1);
+      position: relative; overflow: hidden;
+    }
+    .prog-fill::after {
+      content: ''; position: absolute; top: 0; right: 0; width: 30px; height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.55));
+      animation: pshine 2s ease-in-out infinite;
+    }
+    @keyframes pshine { 0%,100%{opacity:0} 50%{opacity:1} }
+
+    /* READING */
+    .topic-line {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 11px; font-weight: 800; letter-spacing: 2px; text-transform: uppercase;
+      color: var(--accent); margin-bottom: 12px;
+    }
+    .topic-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); animation: pdot 2s ease-in-out infinite; }
+    @keyframes pdot { 0%,100%{transform:scale(1);opacity:1} 50%{transform:scale(1.6);opacity:0.55} }
+    .chunk-title {
+      font-family: 'Playfair Display', serif; font-size: 23px; font-weight: 700;
+      color: var(--text); margin-bottom: 18px; line-height: 1.3;
+    }
+    .chunk-card {
+      background: var(--bg); border: 1.5px solid var(--border); border-radius: 16px;
+      padding: 24px 26px; margin-bottom: 22px; position: relative; overflow: hidden;
+    }
+    .chunk-card::before {
+      content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 4px;
+      background: linear-gradient(180deg, var(--accent), var(--accent2)); border-radius: 4px 0 0 4px;
+    }
+    .chunk-text { font-size: 15.5px; line-height: 1.9; color: #4a3040; font-weight: 500; }
+    .chunk-text.anim { animation: cIn 0.42s cubic-bezier(0.22,1,0.36,1) both; }
+    @keyframes cIn { from{opacity:0;transform:translateX(-14px)} to{opacity:1;transform:translateX(0)} }
+    .read-tip { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--sub); font-weight: 600; margin-bottom: 22px; }
+
+    /* QUESTION */
+    .q-label {
+      display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: 800;
+      letter-spacing: 2px; text-transform: uppercase; color: var(--accent); margin-bottom: 14px;
+    }
+    .q-label-icon {
+      width: 26px; height: 26px; border-radius: 50%; background: var(--accent-light);
+      border: 1.5px solid var(--accent-mid); display: flex; align-items: center; justify-content: center; font-size: 13px;
+    }
+    .q-text { font-family: 'Playfair Display', serif; font-size: 20px; font-weight: 700; line-height: 1.45; color: var(--text); margin-bottom: 20px; }
+    .options-grid { display: flex; flex-direction: column; gap: 11px; margin-bottom: 18px; }
+    .opt {
+      width: 100%; text-align: left; padding: 15px 18px; border-radius: 14px;
+      border: 2px solid var(--border); background: var(--bg);
+      font-family: 'Nunito', sans-serif; font-size: 14.5px; font-weight: 600; cursor: pointer;
+      transition: border-color 0.2s, background 0.2s, transform 0.2s, box-shadow 0.2s;
+      color: var(--text); display: flex; align-items: center; gap: 14px;
+    }
+    .opt:hover:not(:disabled) { border-color: var(--accent); background: var(--accent-light); transform: translateX(5px); box-shadow: 0 4px 14px var(--shadow-c); }
+    .opt-letter {
+      width: 30px; height: 30px; border-radius: 50%; background: var(--border); color: var(--sub);
+      font-size: 12px; font-weight: 900; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center; transition: background 0.2s, color 0.2s, transform 0.2s;
+    }
+    .opt:hover:not(:disabled) .opt-letter { background: var(--accent); color: #fff; transform: scale(1.1); }
+    .opt-text { flex: 1; }
+    .opt-ricon { margin-left: auto; font-size: 18px; opacity: 0; transform: scale(0); transition: opacity 0.2s, transform var(--bounce); }
+    .opt.correct { border-color: var(--correct); background: var(--correct-bg); }
+    .opt.correct .opt-letter { background: var(--correct); color: #fff; }
+    .opt.correct .opt-text { color: var(--correct); font-weight: 700; }
+    .opt.correct .opt-ricon { opacity: 1; transform: scale(1); }
+    .opt.wrong { border-color: var(--wrong); background: var(--wrong-bg); }
+    .opt.wrong .opt-letter { background: var(--wrong); color: #fff; }
+    .opt.wrong .opt-text { color: var(--wrong); }
+    .opt.wrong .opt-ricon { opacity: 1; transform: scale(1); }
+    .opt.dimmed { opacity: 0.38; }
+
+    .fb-banner { border-radius: 12px; padding: 13px 18px; display: none; align-items: flex-start; gap: 10px; margin-bottom: 18px; }
+    .fb-banner.show { display: flex; animation: fbIn 0.33s cubic-bezier(0.22,1,0.36,1) both; }
+    @keyframes fbIn { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }
+    .fb-banner.correct { background: var(--correct-bg); border: 1.5px solid var(--correct-bd); color: var(--correct); }
+    .fb-banner.wrong   { background: var(--wrong-bg);   border: 1.5px solid var(--wrong-bd);   color: var(--wrong); }
+    .fb-icon { font-size: 18px; flex-shrink: 0; margin-top: 1px; }
+    .fb-main { font-size: 14px; font-weight: 700; }
+    .fb-detail { font-size: 12px; font-weight: 500; opacity: 0.8; margin-top: 3px; }
+
+    /* MODE SELECT (inside card) */
+    .section-title { font-family: 'Playfair Display', serif; font-size: 30px; font-weight: 700; color: var(--text); margin-bottom: 6px; line-height: 1.2; }
+    .section-sub { color: var(--sub); font-size: 14px; font-weight: 500; margin-bottom: 26px; line-height: 1.55; }
+    .mode-grid-inner { display: grid; grid-template-columns: repeat(3,1fr); gap: 13px; margin-bottom: 30px; }
+    .mode-card-inner {
+      border: 2px solid var(--border); border-radius: 16px; padding: 24px 14px 18px;
+      text-align: center; cursor: pointer; background: var(--bg);
+      transition: border-color var(--ease), background var(--ease), transform var(--ease), box-shadow var(--ease);
+      position: relative; overflow: hidden; user-select: none;
+    }
+    .mode-card-inner:hover { border-color: var(--accent); transform: translateY(-5px); box-shadow: 0 10px 28px var(--shadow-c); }
+    .mode-card-inner.selected { border-color: var(--accent); background: var(--accent-light); box-shadow: 0 0 0 4px var(--accent-mid); }
+    .mode-card-inner.selected .mode-icon { transform: scale(1.3) rotate(-6deg); }
+    .mode-check {
+      position: absolute; top: 9px; right: 9px; width: 20px; height: 20px; border-radius: 50%;
+      background: var(--accent); color: #fff; font-size: 11px; font-weight: 900;
+      display: flex; align-items: center; justify-content: center;
+      opacity: 0; transform: scale(0); transition: opacity 0.2s, transform var(--bounce);
+    }
+    .mode-card-inner.selected .mode-check { opacity: 1; transform: scale(1); }
+    .mode-icon { font-size: 38px; margin-bottom: 10px; display: block; transition: transform var(--bounce); }
+    .mode-label { font-size: 12px; font-weight: 800; letter-spacing: 1.5px; text-transform: uppercase; }
+    .mode-desc  { font-size: 11.5px; color: var(--sub); margin-top: 5px; font-weight: 500; }
+
+    /* FINAL SCORE */
+    .final-center { text-align: center; }
+    .final-eyebrow {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: var(--accent-light); color: var(--accent);
+      font-size: 11px; font-weight: 800; letter-spacing: 2px; text-transform: uppercase;
+      padding: 5px 14px; border-radius: 99px; margin-bottom: 14px; border: 1px solid var(--accent-mid);
+    }
+    .final-title { font-family: 'Playfair Display', serif; font-size: 30px; font-weight: 900; color: var(--text); margin-bottom: 5px; }
+    .final-mode { font-size: 13px; font-weight: 600; color: var(--sub); margin-bottom: 26px; }
+    .ring-wrap { display: flex; justify-content: center; margin-bottom: 22px; }
+    .ring { width: 155px; height: 155px; position: relative; }
+    .ring svg { transform: rotate(-90deg); }
+    .ring circle { fill: none; stroke-width: 11; stroke-linecap: round; }
+    .ring .rt { stroke: var(--bg2); }
+    .ring .rf { stroke: var(--accent); stroke-dasharray: 408; stroke-dashoffset: 408; transition: stroke-dashoffset 1.2s cubic-bezier(0.22,1,0.36,1); filter: drop-shadow(0 0 7px var(--accent2)); }
+    .ring-center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+    .ring-score-big { font-family: 'Playfair Display', serif; font-size: 42px; font-weight: 900; color: var(--accent); line-height: 1; }
+    .ring-denom { font-size: 13px; color: var(--sub); font-weight: 600; margin-top: 2px; }
+    .ring-pct { font-size: 11px; font-weight: 800; color: var(--accent); background: var(--accent-light); padding: 2px 9px; border-radius: 99px; margin-top: 4px; }
+    .grade-block { text-align: center; margin-bottom: 20px; }
+    .grade-emoji { font-size: 38px; display: block; margin-bottom: 7px; animation: bIn 0.6s 0.35s both; }
+    @keyframes bIn { 0%{transform:scale(0) rotate(-15deg);opacity:0} 60%{transform:scale(1.2) rotate(5deg)} 100%{transform:scale(1) rotate(0);opacity:1} }
+    .grade-title { font-family: 'Playfair Display', serif; font-size: 26px; font-weight: 700; color: var(--text); margin-bottom: 8px; }
+    .grade-msg { font-size: 14px; color: var(--sub); line-height: 1.75; max-width: 420px; margin: 0 auto; font-weight: 500; }
+    .sdg4-block {
+      background: linear-gradient(135deg,#e3f0fc,#d3e7f8); border: 1.5px solid #a8ccec;
+      border-radius: 14px; padding: 14px 18px; margin: 22px 0;
+      display: flex; align-items: flex-start; gap: 12px;
+    }
+    .sdg4-ico { font-size: 26px; flex-shrink: 0; margin-top: 1px; }
+    .sdg4-txt { font-size: 12.5px; color: #1a4f7a; font-weight: 600; line-height: 1.65; }
+    .sdg4-txt strong { font-weight: 900; color: #0d3552; display: block; margin-bottom: 3px; }
+    .stats-row { display: grid; grid-template-columns: repeat(3,1fr); gap: 11px; margin-bottom: 24px; }
+    .stat { background: var(--bg); border: 1.5px solid var(--border); border-radius: 14px; padding: 14px 10px; text-align: center; }
+    .stat-val { font-family: 'Playfair Display', serif; font-size: 30px; font-weight: 700; line-height: 1; margin-bottom: 4px; }
+    .stat-lbl { font-size: 10.5px; font-weight: 800; color: var(--sub); text-transform: uppercase; letter-spacing: 0.8px; }
+
+    /* SHARED UTILS */
+    .row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+    .row.center { justify-content: center; }
+    .btn {
+      display: inline-flex; align-items: center; gap: 8px; padding: 13px 28px;
+      border-radius: 50px; border: none; font-family: 'Nunito', sans-serif;
+      font-size: 14.5px; font-weight: 800; cursor: pointer; letter-spacing: 0.2px;
+      transition: transform var(--ease), box-shadow var(--ease), opacity var(--ease), background var(--ease);
+    }
+    .btn-primary { background: linear-gradient(135deg, var(--accent), var(--accent2)); color: #fff; box-shadow: 0 4px 18px var(--shadow-c); }
+    .btn-primary:hover:not(:disabled) { transform: translateY(-2px) scale(1.02); box-shadow: 0 8px 28px var(--shadow-c); }
+    .btn-primary:active:not(:disabled) { transform: scale(0.97); }
+    .btn-primary:disabled { opacity: 0.36; cursor: not-allowed; }
+    .btn-ghost { background: transparent; color: var(--accent); border: 2px solid var(--accent-mid); }
+    .btn-ghost:hover { background: var(--accent-light); border-color: var(--accent); transform: translateY(-1px); }
+    .card-foot { margin-top: 26px; padding-top: 16px; border-top: 1.5px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+    .brand-sm { font-size: 11px; font-weight: 900; letter-spacing: 1px; color: var(--accent); text-transform: uppercase; }
+    .sdg4-tag { font-size: 10.5px; font-weight: 700; color: var(--sub); }
+
+    @media (max-width: 680px) {
+      .dash-hero h1 { font-size: 30px; }
+      .problem-grid, .mode-grid, .bottom-grid { grid-template-columns: 1fr; }
+      .dash-nav-links { display: none; }
+      .dash-hero, .dash-section, .modes-section, .dash-bottom { padding-left: 20px; padding-right: 20px; }
+      .dash-divider { margin: 0 20px; }
+      .card { padding: 34px 22px; }
+      .mode-grid-inner { grid-template-columns: 1fr; }
+      .hero-stats { gap: 20px; flex-wrap: wrap; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="sdg-bar"></div>
+
+<!-- ════════════════════════════════════════════════
+     SCREEN: DASHBOARD
+════════════════════════════════════════════════ -->
+<div class="screen active" id="screen-dashboard">
+
+  <nav class="dash-nav">
+    <div class="dash-nav-logo">
+      <div class="nav-logo-mark"><i class="ti ti-book-2"></i></div>
+      <span class="nav-logo-text">Micro<span>Read</span></span>
+    </div>
+    <div class="dash-nav-links">
+      <button class="nav-link active" onclick="scrollTo(0,0)"><i class="ti ti-home"></i>Home</button>
+      <button class="nav-link" onclick="document.getElementById('modes-anchor').scrollIntoView({behavior:'smooth'})"><i class="ti ti-layout-grid"></i>Modes</button>
+      <button class="nav-link" onclick="document.getElementById('about-anchor').scrollIntoView({behavior:'smooth'})"><i class="ti ti-info-circle"></i>About</button>
+      <button class="nav-link" onclick="document.getElementById('about-anchor').scrollIntoView({behavior:'smooth'})"><i class="ti ti-star"></i>Recommendations</button>
+      <button class="nav-link" onclick="document.getElementById('about-anchor').scrollIntoView({behavior:'smooth'})"><i class="ti ti-help-circle"></i>Help</button>
+    </div>
+    <button class="nav-cta" onclick="goTo('screen-mode')"><i class="ti ti-player-play"></i>Start reading</button>
+  </nav>
+
+  <!-- HERO -->
+  <section class="dash-hero">
+    <div class="hero-eyebrow">
+      <span class="sdg-dot"></span>
+      Aligned with UN SDG 4 — Quality Education
+    </div>
+    <h1>Reading comprehension<br>is in <em>decline.</em><br>MicroRead fixes that.</h1>
+    <p>Studies show sustained reading ability drops sharply when learners are surrounded by short-form, passive content. MicroRead uses bite-sized reading chunks paired with interactive checkpoints — keeping attention engaged and comprehension measurable.</p>
+    <div class="hero-stats">
+      <div class="hstat"><span class="hstat-val">65%</span><span class="hstat-lbl">of students read below grade level</span></div>
+      <div class="hstat"><span class="hstat-val">2×</span><span class="hstat-lbl">better retention with checkpoints</span></div>
+      <div class="hstat"><span class="hstat-val">SDG 4</span><span class="hstat-lbl">quality education for all</span></div>
+    </div>
+  </section>
+
+  <hr class="dash-divider"/>
+
+  <!-- WHY IT MATTERS -->
+  <section class="dash-section">
+    <div class="section-eyebrow"><i class="ti ti-alert-circle"></i>Why this matters</div>
+    <div class="problem-grid">
+      <div class="problem-card">
+        <div class="prob-icon pi-pink"><i class="ti ti-brain"></i></div>
+        <h3>Shrinking attention spans</h3>
+        <p>Scrolling culture has rewired how learners process text — passive consumption replaces active comprehension.</p>
+      </div>
+      <div class="problem-card">
+        <div class="prob-icon pi-blue"><i class="ti ti-chart-line-down"></i></div>
+        <h3>Declining literacy scores</h3>
+        <p>Global reading benchmarks have dropped steadily since 2012 across secondary and tertiary education levels.</p>
+      </div>
+      <div class="problem-card">
+        <div class="prob-icon pi-amber"><i class="ti ti-users"></i></div>
+        <h3>Equity gap in access</h3>
+        <p>Learners without structured support fall furthest behind — SDG 4 demands inclusive solutions for all.</p>
+      </div>
+    </div>
+  </section>
+
+  <hr class="dash-divider"/>
+
+  <!-- MODES -->
+  <section class="modes-section" id="modes-anchor">
+    <div class="modes-head">
+      <div class="modes-head-left">
+        <h2>Choose your reading mode</h2>
+        <p>Two engagement styles — pick what works for you today</p>
+      </div>
+    </div>
+    <div class="mode-grid">
+
+      <!-- MODE 1 -->
+      <div class="mode-card-dash">
+        <div class="mode-card-top">
+          <span class="mode-badge mb-pink"><i class="ti ti-video"></i>Visual background</span>
+          <span class="mode-num">Mode 01</span>
+        </div>
+        <div class="mode-card-body">
+          <h3>User-selected visual background reading</h3>
+          <p>Choose a calming background clip — ASMR, satisfying videos, or game footage. Reading text overlays the video to keep attention anchored without losing engagement. Optional voiceover reads the passage aloud.</p>
+          <div class="mode-flow">
+            <span class="flow-step"><i class="ti ti-movie"></i>Choose clip</span>
+            <span class="flow-arr">›</span>
+            <span class="flow-step"><i class="ti ti-text-size"></i>Text overlay</span>
+            <span class="flow-arr">›</span>
+            <span class="flow-step"><i class="ti ti-microphone"></i>Voiceover</span>
+            <span class="flow-arr">›</span>
+            <span class="flow-step"><i class="ti ti-circle-check"></i>Check</span>
+          </div>
+        </div>
+        <button class="mode-card-btn" onclick="goTo('screen-mode')">
+          Launch mode 1 <i class="ti ti-arrow-right"></i>
+        </button>
+      </div>
+
+      <!-- MODE 2 -->
+      <div class="mode-card-dash">
+        <div class="mode-card-top">
+          <span class="mode-badge mb-purple"><i class="ti ti-device-gamepad-2"></i>Interactive game</span>
+          <span class="mode-num">Mode 02</span>
+        </div>
+        <div class="mode-card-body">
+          <h3>Interactive game-style reading</h3>
+          <p>Reading content is embedded into step-by-step interactive tasks. You must engage with each prompt to unlock the next — making comprehension an active, game-like experience from start to finish.</p>
+          <div class="mode-flow">
+            <span class="flow-step"><i class="ti ti-book"></i>Read prompt</span>
+            <span class="flow-arr">›</span>
+            <span class="flow-step"><i class="ti ti-hand-click"></i>Engage task</span>
+            <span class="flow-arr">›</span>
+            <span class="flow-step"><i class="ti ti-lock-open"></i>Unlock next</span>
+            <span class="flow-arr">›</span>
+            <span class="flow-step"><i class="ti ti-trophy"></i>Score</span>
+          </div>
+        </div>
+        <button class="mode-card-btn" onclick="goTo('screen-mode')">
+          Launch mode 2 <i class="ti ti-arrow-right"></i>
+        </button>
+      </div>
+
+    </div>
+  </section>
+
+  <hr class="dash-divider"/>
+
+  <!-- ABOUT / RECOMMENDATIONS / HELP -->
+  <div class="dash-bottom" id="about-anchor">
+    <div class="bottom-grid">
+      <div class="bottom-card">
+        <i class="ti ti-info-circle"></i>
+        <h4>About</h4>
+        <p>Learn how MicroRead was built and the research behind attention-adaptive reading.</p>
+      </div>
+      <div class="bottom-card">
+        <i class="ti ti-star"></i>
+        <h4>Recommendations</h4>
+        <p>Curated reading paths and topic suggestions tailored to your level and interests.</p>
+      </div>
+      <div class="bottom-card">
+        <i class="ti ti-help-circle"></i>
+        <h4>Help</h4>
+        <p>Quick-start guides, FAQs, and tips to get the most out of each reading mode.</p>
+      </div>
+    </div>
+  </div>
+
+  <footer class="dash-footer">
+    <span class="footer-brand">MicroRead</span>
+    <span class="footer-sdg">🌍 SDG 4 · Quality Education for All</span>
+    <div class="sdg-strip">
+      <div class="sdg-pip" style="background:#e5243b"></div>
+      <div class="sdg-pip" style="background:#dda63a"></div>
+      <div class="sdg-pip" style="background:#4c9f38"></div>
+      <div class="sdg-pip" style="background:#c5192d"></div>
+      <div class="sdg-pip" style="background:#26bde2"></div>
+      <div class="sdg-pip" style="background:#fcc30b"></div>
+      <div class="sdg-pip" style="background:#00689d"></div>
+      <div class="sdg-pip" style="background:#19486a"></div>
+    </div>
+  </footer>
+
+</div><!-- /screen-dashboard -->
+
+
+<!-- ════════════════════════════════════════════════
+     SCREEN: MODE SELECT
+════════════════════════════════════════════════ -->
+<div class="screen" id="screen-mode">
+  <div class="card-screen-wrap">
+    <div class="card">
+      <div class="section-title">Choose your topic 🌟</div>
+      <div class="section-sub">Each theme has its own passage and 4 checkpoint questions. Pick what sparks your curiosity today.</div>
+      <div class="mode-grid-inner">
+        <div class="mode-card-inner" id="mode-animals" onclick="selectMode('animals')">
+          <div class="mode-check">✓</div>
+          <span class="mode-icon">🐾</span>
+          <div class="mode-label">Animals</div>
+          <div class="mode-desc">Wildlife wonders</div>
+        </div>
+        <div class="mode-card-inner" id="mode-games" onclick="selectMode('games')">
+          <div class="mode-check">✓</div>
+          <span class="mode-icon">🎮</span>
+          <div class="mode-label">Games</div>
+          <div class="mode-desc">Game design history</div>
+        </div>
+        <div class="mode-card-inner" id="mode-satisfying" onclick="selectMode('satisfying')">
+          <div class="mode-check">✓</div>
+          <span class="mode-icon">✨</span>
+          <div class="mode-label">Satisfying</div>
+          <div class="mode-desc">Feel-good science</div>
+        </div>
+      </div>
+      <div class="row">
+        <button class="btn btn-ghost" onclick="goTo('screen-dashboard')">← Back</button>
+        <button class="btn btn-primary" id="btn-start" disabled onclick="startReading()">Start Reading →</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════
+     SCREEN: READING
+════════════════════════════════════════════════ -->
+<div class="screen" id="screen-reading">
+  <div class="card-screen-wrap">
+    <div class="card">
+      <div class="prog-section">
+        <div class="prog-head">
+          <div><span class="chunk-badge" id="r-badge">Chunk 1 of 4</span><span class="chunk-type">📖 Reading</span></div>
+          <div class="prog-right"><span class="pct-lbl" id="r-pct">0%</span><div class="score-pill">⭐ <span class="sn" id="r-score">0</span></div></div>
+        </div>
+        <div class="prog-track"><div class="prog-fill" id="r-bar" style="width:0%"></div></div>
+      </div>
+      <div class="topic-line"><span class="topic-dot"></span><span id="r-topic">Animals</span></div>
+      <div class="chunk-title" id="r-title"></div>
+      <div class="chunk-card"><div class="chunk-text anim" id="r-text"></div></div>
+      <div class="read-tip">💡 Read carefully — a checkpoint question follows!</div>
+      <div class="row">
+        <button class="btn btn-primary" onclick="showQuestion()">I'm Ready — Next →</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════
+     SCREEN: QUESTION
+════════════════════════════════════════════════ -->
+<div class="screen" id="screen-question">
+  <div class="card-screen-wrap">
+    <div class="card">
+      <div class="prog-section">
+        <div class="prog-head">
+          <div><span class="chunk-badge" id="q-badge">Check 1 of 4</span><span class="chunk-type">❓ Checkpoint</span></div>
+          <div class="prog-right"><span class="pct-lbl" id="q-pct">0%</span><div class="score-pill">⭐ <span class="sn" id="q-score">0</span></div></div>
+        </div>
+        <div class="prog-track"><div class="prog-fill" id="q-bar" style="width:0%"></div></div>
+      </div>
+      <div class="q-label"><span class="q-label-icon">❓</span>Comprehension Check</div>
+      <div class="q-text" id="q-text"></div>
+      <div class="options-grid" id="opts"></div>
+      <div class="fb-banner" id="fb">
+        <span class="fb-icon" id="fb-icon"></span>
+        <div><div class="fb-main" id="fb-main"></div><div class="fb-detail" id="fb-detail"></div></div>
+      </div>
+      <div class="row">
+        <button class="btn btn-primary" id="btn-cont" style="display:none" onclick="nextChunk()">Continue Reading →</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════
+     SCREEN: FINAL SCORE
+════════════════════════════════════════════════ -->
+<div class="screen" id="screen-final">
+  <div class="card-screen-wrap">
+    <div class="card">
+      <div class="final-center">
+        <div class="final-eyebrow">🎉 Session Complete</div>
+        <div class="final-title">Here's your result!</div>
+        <div class="final-mode" id="f-mode">Animals · 4 chunks read</div>
+      </div>
+      <div class="ring-wrap">
+        <div class="ring">
+          <svg width="155" height="155" viewBox="0 0 155 155">
+            <circle class="rt" cx="77.5" cy="77.5" r="65"/>
+            <circle class="rf" id="ring-fill" cx="77.5" cy="77.5" r="65" stroke-dasharray="408" stroke-dashoffset="408"/>
+          </svg>
+          <div class="ring-center">
+            <div class="ring-score-big" id="f-score">0</div>
+            <div class="ring-denom" id="f-denom">/ 4</div>
+            <div class="ring-pct" id="f-pct">0%</div>
+          </div>
+        </div>
+      </div>
+      <div class="grade-block">
+        <span class="grade-emoji" id="g-emoji">🌟</span>
+        <div class="grade-title" id="g-title"></div>
+        <div class="grade-msg" id="g-msg"></div>
+      </div>
+      <div class="sdg4-block">
+        <span class="sdg4-ico">🎓</span>
+        <div class="sdg4-txt" id="sdg4-txt">
+          <strong>SDG 4 · Quality Education</strong>
+          Every chunk you read builds the habit of focused, self-directed learning.
+        </div>
+      </div>
+      <div class="stats-row" id="stats"></div>
+      <div class="row center">
+        <button class="btn btn-ghost" onclick="goTo('screen-dashboard')">← Back to Home</button>
+        <button class="btn btn-primary" onclick="replayMode()">🔁 Replay This Mode</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const MODES = {
+  animals: {
+    label: 'Animals 🐾', topic: 'Wildlife Wonders',
+    chunks: [
+      { title: "The Secret Life of Octopuses", text: "Octopuses are among the most intelligent invertebrates on Earth. They have three hearts, blue blood, and nine brains — one central brain and one in each of their eight arms. Each arm can act semi-independently, solving problems on its own without waiting for instructions from the central brain." },
+      { title: "Masters of Camouflage", text: "Despite being colorblind, octopuses can match the color, texture, and pattern of their surroundings in milliseconds. They do this using special skin cells called chromatophores, which expand and contract to create stunning visual patterns. Scientists believe they may sense light directly through their skin." },
+      { title: "Tool Use & Problem Solving", text: "Octopuses have been observed carrying coconut shell halves across the seafloor to use later as portable shelters — a form of tool use previously thought unique to mammals. They can also open jars, escape from tanks, and recognize individual human faces. In captivity, they have been known to short-circuit aquarium lights by squirting water at them." },
+      { title: "A Short but Brilliant Life", text: "Most octopuses live only one to two years. After a female lays her eggs, she guards them obsessively — fanning them with water and cleaning them — without eating, until she dies shortly after they hatch. Despite their short lives, their intelligence is so advanced that researchers consider them a window into how complex minds can evolve along very different paths from our own." }
+    ],
+    questions: [
+      { text: "How many brains does an octopus have in total?", options: ["Three","Eight","Nine","One"], answer: 2, explanation: "1 central brain + 1 in each of its 8 arms = 9 total brains." },
+      { text: "What are the special skin cells octopuses use for camouflage called?", options: ["Melanocytes","Chromatophores","Photoreceptors","Pigmentocytes"], answer: 1, explanation: "Chromatophores expand and contract to change color and texture in milliseconds." },
+      { text: "Which object have octopuses been observed using as a portable tool?", options: ["Seashell","Rock","Coconut shell","Coral fragment"], answer: 2, explanation: "They carry coconut shell halves to use as portable shelters — a remarkable use of tools." },
+      { text: "What happens to a female octopus after her eggs hatch?", options: ["She lays more eggs","She teaches her young","She migrates deep","She dies"], answer: 3, explanation: "She stops eating while guarding eggs and dies shortly after they hatch." }
+    ]
+  },
+  games: {
+    label: 'Games 🎮', topic: 'Game Design History',
+    chunks: [
+      { title: "The Birth of Video Games", text: "The first commercially successful video game was Pong, released by Atari in 1972. But the concept of interactive electronic games goes back further — to 1958, when physicist William Higinbotham created 'Tennis for Two' on an oscilloscope at Brookhaven National Laboratory, simply to entertain visitors at an open house." },
+      { title: "The Great Crash of 1983", text: "By 1983, the North American video game market collapsed spectacularly — revenues fell from $3.2 billion to $100 million in just two years. The crash was caused by a flood of low-quality games and consoles, with the notoriously poor Atari port of E.T. the Extra-Terrestrial often cited as a symbol of the era. Millions of unsold cartridges were buried in a New Mexico landfill." },
+      { title: "Nintendo Saves the Day", text: "Nintendo rescued the industry in 1985 by launching the Nintendo Entertainment System (NES) in North America, cleverly marketing it as a 'toy' rather than a video game console to avoid consumer skepticism. Super Mario Bros. became the system's landmark title. Nintendo enforced strict quality control on all NES games — a direct response to the chaos that caused the crash." },
+      { title: "Games as Art & Culture", text: "Today, the global video game industry generates over $180 billion annually — more than the film and music industries combined. Games like Journey, Disco Elysium, and The Last of Us have been recognized as legitimate artistic works. In 2011, the U.S. Supreme Court ruled that video games qualify as protected free speech under the First Amendment, cementing their place in culture." }
+    ],
+    questions: [
+      { text: "In what year was Pong released by Atari?", options: ["1958","1968","1972","1975"], answer: 2, explanation: "Pong launched in 1972. 'Tennis for Two' (1958) predated it but was not a commercial product." },
+      { text: "What primarily caused the North American video game market crash of 1983?", options: ["Home computer competition","A flood of low-quality games and consoles","Government regulation","A global recession"], answer: 1, explanation: "Too many poor-quality games flooded the market, destroying consumer trust." },
+      { text: "How did Nintendo market the NES to overcome consumer skepticism?", options: ["As a computer","As an educational device","As a toy","As a multimedia player"], answer: 2, explanation: "Calling it a 'toy' sidestepped the negative reputation video game consoles had earned." },
+      { text: "What did the U.S. Supreme Court rule about video games in 2011?", options: ["Regulated like films","Protected free speech","Harmful to children","Subject to special taxes"], answer: 1, explanation: "The Court ruled video games are protected speech under the First Amendment." }
+    ]
+  },
+  satisfying: {
+    label: 'Satisfying ✨', topic: 'Feel-Good Science',
+    chunks: [
+      { title: "Why Things Feel Satisfying", text: "The feeling of satisfaction — when a puzzle clicks, a surface becomes perfectly clean, or objects align just right — is deeply rooted in brain chemistry. Your brain releases a small burst of dopamine when a task reaches completion or when order emerges from chaos. This is called the 'completion response,' and it evolved to reward us for finishing useful tasks." },
+      { title: "The Science of ASMR", text: "ASMR (Autonomous Sensory Meridian Response) is a tingling sensation that begins at the scalp and travels down the spine in response to soft sounds, gentle visuals, or methodical actions. Researchers at the University of Sheffield found that ASMR activates the same brain regions as grooming and social bonding in primates — it may be a form of virtual social comfort." },
+      { title: "Perfect Fits & Perceptual Fluency", text: "The delight people feel watching satisfying videos — liquids poured into perfectly shaped containers, tiles laid with no gaps, kinetic sand cut cleanly — triggers what psychologists call 'perceptual fluency.' When the brain processes a perfectly ordered scene with zero effort, it interprets that ease as a reward signal. Order feels good because it is cognitively cheap." },
+      { title: "Flow State: The Ultimate Satisfaction", text: "Psychologist Mihaly Csikszentmihalyi identified 'flow' as a mental state of complete immersion in a challenging but manageable task. During flow, the prefrontal cortex quiets down, time distorts, and the brain produces alpha waves. People describe it as effortless effort — deeply satisfying without even trying. Activities from knitting to coding to sports can all induce it." }
+    ],
+    questions: [
+      { text: "What brain chemical is released during the 'completion response'?", options: ["Serotonin","Oxytocin","Dopamine","Adrenaline"], answer: 2, explanation: "Dopamine is released when a task completes or order emerges from chaos." },
+      { text: "What did Sheffield researchers compare ASMR brain activation to?", options: ["Sleep cycles in mammals","Grooming and social bonding in primates","Meditation in Buddhist monks","Play behavior in children"], answer: 1, explanation: "ASMR activates the same regions as primate social grooming — simulating virtual comfort." },
+      { text: "What term describes the brain's reward from processing a perfectly ordered scene?", options: ["Completion bias","Visual harmony","Perceptual fluency","Spatial reward"], answer: 2, explanation: "Perceptual fluency: effortless processing of order is interpreted by the brain as a reward." },
+      { text: "Who identified the concept of 'flow' as complete mental immersion?", options: ["Sigmund Freud","B.F. Skinner","Abraham Maslow","Mihaly Csikszentmihalyi"], answer: 3, explanation: "Csikszentmihalyi named and studied the 'flow' state of effortless, total absorption." }
+    ]
+  }
+};
+
+let currentMode = null, chunkIndex = 0, score = 0, total = 0, answered = false;
+
+function goTo(targetId) {
+  const cur = document.querySelector('.screen.active');
+  const tgt = document.getElementById(targetId);
+  if (!cur || cur === tgt) return;
+  cur.classList.add('out');
+  cur.addEventListener('animationend', function h() {
+    cur.classList.remove('active','out');
+    cur.removeEventListener('animationend', h);
+    tgt.classList.add('active');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, { once: true });
+}
+
+function selectMode(mode) {
+  currentMode = mode;
+  document.querySelectorAll('.mode-card-inner').forEach(c => c.classList.remove('selected'));
+  document.getElementById('mode-' + mode).classList.add('selected');
+  document.body.className = 'mode-' + mode;
+  document.getElementById('btn-start').disabled = false;
+}
+
+function startReading() {
+  chunkIndex = 0; score = 0;
+  total = MODES[currentMode].chunks.length;
+  renderChunk();
+  goTo('screen-reading');
+}
+
+function renderChunk() {
+  const data = MODES[currentMode], chunk = data.chunks[chunkIndex];
+  const pct = Math.round((chunkIndex / total) * 100);
+  document.getElementById('r-bar').style.width = pct + '%';
+  document.getElementById('r-pct').textContent = pct + '%';
+  document.getElementById('r-badge').textContent = 'Chunk ' + (chunkIndex+1) + ' of ' + total;
+  document.getElementById('r-score').textContent = score;
+  document.getElementById('r-topic').textContent = data.topic;
+  document.getElementById('r-title').textContent = chunk.title;
+  const el = document.getElementById('r-text');
+  el.classList.remove('anim'); void el.offsetWidth;
+  el.textContent = chunk.text; el.classList.add('anim');
+}
+
+function showQuestion() {
+  const data = MODES[currentMode], q = data.questions[chunkIndex];
+  const pct = Math.round(((chunkIndex+0.5) / total) * 100);
+  const ltrs = ['A','B','C','D'];
+  document.getElementById('q-bar').style.width = pct + '%';
+  document.getElementById('q-pct').textContent = pct + '%';
+  document.getElementById('q-badge').textContent = 'Check ' + (chunkIndex+1) + ' of ' + total;
+  document.getElementById('q-score').textContent = score;
+  document.getElementById('q-text').textContent = q.text;
+  const opts = document.getElementById('opts');
+  opts.innerHTML = '';
+  q.options.forEach((opt, i) => {
+    const btn = document.createElement('button');
+    btn.className = 'opt';
+    btn.innerHTML = '<span class="opt-letter">'+ltrs[i]+'</span><span class="opt-text">'+opt+'</span><span class="opt-ricon"></span>';
+    btn.dataset.i = i;
+    btn.onclick = () => handleAnswer(i, q.answer, q.explanation, q.options[q.answer]);
+    opts.appendChild(btn);
+  });
+  document.getElementById('fb').className = 'fb-banner';
+  document.getElementById('btn-cont').style.display = 'none';
+  answered = false;
+  goTo('screen-question');
+}
+
+function handleAnswer(sel, correct, explanation, correctText) {
+  if (answered) return; answered = true;
+  document.querySelectorAll('.opt').forEach(btn => {
+    btn.disabled = true;
+    const i = parseInt(btn.dataset.i), icon = btn.querySelector('.opt-ricon');
+    if (i === correct) { btn.classList.add('correct'); icon.textContent = '✓'; }
+    else if (i === sel && sel !== correct) { btn.classList.add('wrong'); icon.textContent = '✗'; }
+    else btn.classList.add('dimmed');
+  });
+  const ok = sel === correct;
+  if (ok) { score++; document.getElementById('q-score').textContent = score; }
+  const fb = document.getElementById('fb');
+  fb.className = 'fb-banner ' + (ok ? 'correct' : 'wrong') + ' show';
+  document.getElementById('fb-icon').textContent = ok ? '✅' : '❌';
+  document.getElementById('fb-main').textContent = ok ? 'Correct! Well done.' : 'Not quite — the correct answer was: ' + correctText;
+  document.getElementById('fb-detail').textContent = explanation || '';
+  setTimeout(() => { document.getElementById('btn-cont').style.display = 'inline-flex'; }, 500);
+}
+
+function nextChunk() {
+  chunkIndex++;
+  if (chunkIndex >= total) showFinal();
+  else { renderChunk(); goTo('screen-reading'); }
+}
+
+function showFinal() {
+  const pct = score/total, pctInt = Math.round(pct*100), data = MODES[currentMode];
+  let emoji, title, msg, sdgMsg;
+  if (pct >= 0.75) { emoji='🌟'; title='Excellent Reader!'; msg='Outstanding comprehension! You absorbed the material with impressive accuracy. This is exactly the kind of focused, self-directed learning that SDG 4 champions — keep it up!'; sdgMsg="You're on track to become a lifelong learner — the ultimate goal of Quality Education for All."; }
+  else if (pct >= 0.5) { emoji='📚'; title='Good Progress!'; msg='Solid effort! You grasped the core ideas well. A second read of the trickier chunks will sharpen your retention even further.'; sdgMsg='Progress is progress — every reading session builds the habit of learning that lasts a lifetime.'; }
+  else { emoji='💡'; title='Keep Practicing!'; msg='Learning is a journey, not a destination. Try this mode again and notice how much more you retain on your second pass!'; sdgMsg='Persistence is a superpower. Quality education is built one practice session at a time.'; }
+  document.getElementById('f-mode').textContent = data.label + ' · ' + total + ' chunks read';
+  document.getElementById('f-score').textContent = score;
+  document.getElementById('f-denom').textContent = '/ ' + total;
+  document.getElementById('f-pct').textContent = pctInt + '%';
+  document.getElementById('g-emoji').textContent = emoji;
+  document.getElementById('g-title').textContent = title;
+  document.getElementById('g-msg').textContent = msg;
+  document.getElementById('sdg4-txt').innerHTML = '<strong>SDG 4 · Quality Education</strong>' + sdgMsg;
+  const wrong = total - score;
+  document.getElementById('stats').innerHTML = `<div class="stat"><div class="stat-val" style="color:var(--sub)">${total}</div><div class="stat-lbl">Chunks Read</div></div><div class="stat"><div class="stat-val" style="color:var(--correct)">${score}</div><div class="stat-lbl">Correct ✓</div></div><div class="stat"><div class="stat-val" style="color:var(--wrong)">${wrong}</div><div class="stat-lbl">Missed ✗</div></div>`;
+  goTo('screen-final');
+  setTimeout(() => { document.getElementById('ring-fill').style.strokeDashoffset = 408 - (pct*408); }, 200);
+}
+
+function replayMode() { startReading(); }
+</script>
+</body>
+</html>
